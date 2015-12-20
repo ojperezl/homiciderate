@@ -1,0 +1,79 @@
+---
+title: "Homicide Rate"
+author: "Oscar Javier Perez"
+date: "20 de diciembre de 2015"
+output: pdf_document
+---
+
+This is an R Markdown document example from Homicide rate for Colombia (2003-2014). The report make a comparation between the National Homicide rate vs. Homicide rate of any Municipality Homicide rate and the Department Homicide rate. The data from [Policia Nacional de Colombia](http://oasportal.policia.gov.co/imagenes_ponal/dijin/observatorio/cicri/cifras0.html).
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(fig.width=8, fig.height=5, fig.path='Figs/', echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r libraries}
+library(dplyr)
+library(ggplot2)
+library(reshape)
+```
+
+```{r Carga data, echo = FALSE}
+setwd("/Users/OscarJavier/Dropbox/3. Trabajo/6. DNP/Bases")
+load("div.RData") # data frame: id municipality
+load("hom.RData") # data frame: homicide data base from Colombia
+load("t_hom.RData") # data frame: homicide rate for municipality
+```
+
+```{r Valor x, echo = FALSE}
+x <- 5001 # id municipality (in this case, city from Medeliin)
+
+y <- filter(div, codmun == x) # What Department correspond the municipality ( in this case, Antioquia)
+y = y$coddpto
+```
+
+```{r municipility name - y}
+nombre <- filter(div, codmun == x) # identify in the report what municipality is
+```
+
+```{r}
+summary(t_hom)
+```
+
+The Graph compare the homicide rate in the Municipality of `r nombre$mun` name (red line ) compared to the rate `r nombre$dpto` name (blue line) and the national rate (cyan line).
+
+```{r, echo=FALSE}
+hom_nal <- na.omit(hom) 
+hom_nal <- group_by(hom_nal, anno)
+hom_nal <- summarise(hom_nal, Tcasos = sum(casos))
+hom_nal <- filter(hom_nal, anno != 2015) # only 2003-2014 (the 2015 report is not finisch)
+hom_nal <- mutate(hom_nal, Pob = c(41848959, 42368489, 42888592, 43405956, 43926929, 44451147, 44978832, 45509584, 46044601, 46581823, 47121089, 47661787)) # Pob is population for Colombia between 2003 and 2014
+hom_nal <- mutate(hom_nal, Nacional = ((Tcasos*100000)/Pob)) # calculate nacional homicide rate
+hom_nal <- select(hom_nal, anno, Nacional) # select only variables of interest
+
+hom_dpto <- na.omit(t_hom) # the same process from Departament homicide rate
+hom_dpto <- group_by(hom_dpto, anno, coddpto)
+hom_dpto <- summarise(hom_dpto, Pobdpto = sum(pob)) # calculate population for department
+hom_dpto <- filter(hom_dpto, anno != 2015)
+hom_dpto2 <- na.omit(hom)
+hom_dpto2 <- group_by(hom_dpto2, anno, coddpto)
+hom_dpto2 <- summarise(hom_dpto2, Dcasos = sum(casos))
+hom_dpto2 <- filter(hom_dpto2, anno != 2015)
+hom_dpto <- mutate(hom_dpto, id = paste(coddpto, anno, sep = "_"))
+hom_dpto2 <- mutate(hom_dpto2, id = paste(coddpto, anno, sep = "_"))
+hom_dpto$Dcasos = hom_dpto2$Dcasos[match(hom_dpto$id, hom_dpto2$id)]
+hom_dpto <- mutate(hom_dpto, Departamento = (Dcasos*100000)/Pobdpto)
+hom_dpto <- filter(hom_dpto, coddpto == y)
+hom_dpto <- select(hom_dpto, anno, Departamento)
+
+t_homx <- filter(t_hom, codmun == x, anno != 2015) # municipality homicide rate
+t_homx <- transmute(t_homx, Municipio = Tcasos)
+t_homx <- select(t_homx, anno, Municipio)
+
+ghom <- Reduce(merge, list(hom_nal, hom_dpto, t_homx)) # Graph
+ghom <- select(ghom, anno, Nacional, Departamento, Municipio)
+
+p <- ggplot(ghom, aes(x = anno))
+ghom_long <- melt(ghom, id = "anno")
+ggplot(data=ghom_long, aes(x=anno, y=value, colour = variable)) + geom_line(size = 1.3) + labs(title = "Homicide rate for 100.000 population\n \ National, Departament y Municipality", x = "", y = "Rate for 100.000 population") + theme(legend.position = "top", plot.title = element_text(size = 12)) + scale_colour_manual(values = c("cyan", "blue", "red"))
+```
+
